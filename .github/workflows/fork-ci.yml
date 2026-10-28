@@ -1,0 +1,62 @@
+name: fork-ci
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.9", "3.13"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash   # Git Bash on Windows, the shell Claude Code runs hooks and commands in there
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          persist-credentials: false
+      - run: echo "checked-out SHA $(git rev-parse HEAD)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements-dev.txt
+      - run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+      - run: pytest -q
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          persist-credentials: false
+      - run: echo "checked-out SHA $(git rev-parse HEAD)"
+      - name: shellcheck
+        run: shellcheck install.sh uninstall.sh run.sh hooks/session_start.sh
+
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          persist-credentials: false
+      - run: echo "checked-out SHA $(git rev-parse HEAD)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate plugin manifest
+        run: npx -y @anthropic-ai/claude-code plugin validate .
